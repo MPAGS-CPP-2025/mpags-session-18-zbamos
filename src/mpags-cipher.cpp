@@ -135,6 +135,14 @@ int main(int argc, char* argv[])
         std::reverse(ciphers.begin(), ciphers.end());
     }
 
+    if (std::all_of(settings.cipherType.begin(), settings.cipherType.end(), [](const CipherType& type){
+        return type == CipherType::Caesar;
+    })){
+        std::cout<<"INFO: All ciphers are Caesar"<<std::endl;
+    } else {
+        std::cout<<"INFO: Not all ciphers are Caesar"<<std::endl;
+    }
+
     // Run the cipher(s) on the input text, specifying whether to encrypt/decrypt
     for (const auto& cipher : ciphers) {
         cipherText = cipher->applyCipher(cipherText, settings.cipherMode);
