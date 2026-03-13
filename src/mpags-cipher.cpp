@@ -82,6 +82,15 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    // Initialise Multithreading variables
+    // Check all ciphers are bools
+    const bool allCaesar{std::all_of(settings.cipherType.begin(), settings.cipherType.end(), [](const CipherType& type){
+        return type == CipherType::Caesar;})};
+    
+    // Set number of threads
+    const std::size_t numberOfThreads{4};
+    
+
     // Initialise variables
     char inputChar{'x'};
     std::string cipherText;
@@ -135,17 +144,62 @@ int main(int argc, char* argv[])
         std::reverse(ciphers.begin(), ciphers.end());
     }
 
-    if (std::all_of(settings.cipherType.begin(), settings.cipherType.end(), [](const CipherType& type){
-        return type == CipherType::Caesar;
-    })){
-        std::cout<<"INFO: All ciphers are Caesar"<<std::endl;
-    } else {
-        std::cout<<"INFO: Not all ciphers are Caesar"<<std::endl;
-    }
-
     // Run the cipher(s) on the input text, specifying whether to encrypt/decrypt
-    for (const auto& cipher : ciphers) {
-        cipherText = cipher->applyCipher(cipherText, settings.cipherMode);
+    if (allCaesar){
+        // Multithreaded
+        std::cout<<"INFO: Multithreading"<<std::endl;
+
+        // reserve futures vector and 
+        const std::size_t inputLength = cipherText.size();
+        const std::size_t chunkSize = (inputLength + numberOfThreads - 1) / numberOfThreads;
+
+        std::vector<std::future<std::string>> futures;
+        futures.reserve(numberOfThreads);
+        std::cout<<"about to start "<< numberOfThreads<< "threads"<<std::endl;
+        // loop over number of threads to use
+        for (std::size_t i{0}; i < numberOfThreads; ++i){
+            std::cout<<"starting thread "<< i << std::endl; 
+            // take next chunk from imnput string
+            const std::size_t start = i * chunkSize;
+            const std::size_t end = std::min(start + chunkSize, inputLength);
+
+            if (start >= inputLength) break;
+            std::string chunk = cipherText.substr(start, end - start);
+
+            // start new thread
+            futures.push_back(
+            std::async(std::launch::async, [chunk, &ciphers, &settings]() {
+                std::string result = chunk;
+                for (const auto& cipher : ciphers) {
+                    result = cipher->applyCipher(result, settings.cipherMode);
+                }
+                return result;
+            }));
+        }
+
+        // loop over futures
+        cipherText.clear();
+        for (auto& future : futures) {
+            std::future_status status{std::future_status::ready};
+            do {
+                status = future.wait_for(std::chrono::seconds(1));
+                if (status == std::future_status::timeout) {
+                    std::cout << "[main] Thread still running, waiting...\n";
+                } else if (status == std::future_status::ready) {
+                    std::cout << "[main] Thread completed!\n";
+                }
+            } while (status != std::future_status::ready);
+
+            // now safe to get
+            cipherText += future.get();
+        }
+        
+    } else {
+        // Not multithreaded
+        std::cout<<"INFO: Not multithreading"<<std::endl;
+        for (const auto& cipher : ciphers) {
+            cipherText = cipher->applyCipher(cipherText, settings.cipherMode);
+        }
     }
 
     // Output the encrypted/decrypted text to stdout/file
